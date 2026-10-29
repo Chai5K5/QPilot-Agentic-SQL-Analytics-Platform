@@ -15,9 +15,9 @@ interface QueryInputProps {
 
 const EXAMPLE_QUESTIONS = [
   "Which product categories generated the most revenue from completed orders?",
-  "Show top enterprise customers by completed orders and lifetime value",
-  "Calculate monthly transaction counts and gross volume for the last 6 months",
-  "Summarize analytics execution jobs grouped by status and average duration",
+  "SELECT * FROM customers LIMIT 5;",
+  "SELECT * FROM products WHERE price > 50;",
+  "Show me summary metrics and key records from the orders table",
   "DROP TABLE customers CASCADE;", // Safety test prompt
 ];
 
@@ -62,7 +62,7 @@ export function QueryInput({
             className="flex items-center gap-2 text-sm font-semibold text-white"
           >
             <Sparkles className="w-4 h-4 text-cyan-400" />
-            <span>Ask QPilot in Natural Language</span>
+            <span>Ask QPilot in Natural Language or SQL</span>
           </label>
           <div className="flex items-center gap-1.5 text-xs text-neutral-400 font-mono">
             <ShieldCheck className="w-3.5 h-3.5 text-emerald-400" />
@@ -82,7 +82,7 @@ export function QueryInput({
             }}
             onKeyDown={handleKeyDown}
             disabled={isLoading}
-            placeholder="e.g. Which product categories generated the highest revenue in Q3, and what was their average order value?"
+            placeholder="e.g. Which product categories generated the most revenue from completed orders? or SELECT * FROM customers;"
             className={`w-full p-4 rounded-xl text-sm bg-neutral-950 text-white placeholder-neutral-500 border transition-all resize-none font-sans focus:outline-none focus:ring-2 ${
               validationError
                 ? "border-rose-500 focus:ring-rose-500/20"
@@ -128,7 +128,7 @@ export function QueryInput({
                     setQuestion(ex);
                     if (validationError) setValidationError(null);
                   }}
-                  className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-colors flex-shrink-0 ${
+                  className={`px-2.5 py-1 rounded-lg text-xs whitespace-nowrap transition-colors flex-shrink-0 cursor-pointer ${
                     isDestructive
                       ? "bg-rose-950/40 border border-rose-900/60 text-rose-300 hover:bg-rose-900/40"
                       : "bg-neutral-800/80 border border-neutral-700 text-neutral-300 hover:text-white hover:bg-neutral-700"

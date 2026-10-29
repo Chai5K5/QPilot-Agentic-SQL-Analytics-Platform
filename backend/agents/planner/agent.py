@@ -5,9 +5,11 @@ from api.schemas import ExecutionPlan
 
 load_dotenv()
 
+api_key = os.getenv("GROQ_API_KEY") or "gsk_placeholder"
+
 llm = ChatGroq(
     model="openai/gpt-oss-20b",
-    api_key=os.getenv("GROQ_API_KEY"),
+    api_key=api_key,
     temperature=0
 )
 
@@ -15,6 +17,7 @@ structured_llm = llm.with_structured_output(
     ExecutionPlan,
     method="json_schema"
 )
+
 
 def plan_user_request(question: str) -> ExecutionPlan:
     """
