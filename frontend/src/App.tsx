@@ -9,16 +9,29 @@ import { DocsPage } from "@/pages/DocsPage";
 import { 
   DatabaseConnection, 
   QueryHistoryEntry, 
-  BackendHealth 
+  BackendHealth,
+  TableSchema 
 } from "@/types";
 import { 
   loadSavedConnections, 
   saveConnections, 
-  DEFAULT_SCHEMAS, 
   loadQueryHistory, 
   saveQueryHistory 
 } from "@/services/dbStore";
-import { checkBackendHealth } from "@/services/api";
+import { 
+  checkBackendHealth, 
+  fetchActiveSchema, 
+  connectDatabase 
+} from "@/services/api";
+
+const PLACEHOLDER_CONNECTION: DatabaseConnection = {
+  id: "none",
+  name: "No Database Connected",
+  type: "postgresql",
+  database: "",
+  status: "disconnected",
+  isDefault: true,
+};
 
 export default function App() {
   const [activePage, setActivePage] = useState<
@@ -26,7 +39,8 @@ export default function App() {
   >("landing");
 
   const [connections, setConnections] = useState<DatabaseConnection[]>([]);
-  const [activeConnection, setActiveConnection] = useState<DatabaseConnection | null>(null);
+  const [activeConnection, setActiveConnection] = useState<DatabaseConnection>(PLACEHOLDER_CONNECTION);
+  const [schemas, setSchemas] = useState<TableSchema[]>([]);
   const [queryHistory, setQueryHistory] = useState<QueryHistoryEntry[]>([]);
   const [backendHealth, setBackendHealth] = useState<BackendHealth>({
     status: "checking",
@@ -40,8 +54,24 @@ export default function App() {
   useEffect(() => {
     const savedConns = loadSavedConnections();
     setConnections(savedConns);
-    const defaultConn = savedConns.find((c) => c.isDefault) || savedConns[0];
-    setActiveConnection(defaultConn);
+    if (savedConns.length > 0) {
+      const defaultConn = savedConns.find((c) => c.isDefault) || savedConns[0];
+      setActiveConnection(defaultConn);
+
+      // Reconnect active connection on backend to ensure schema is loaded
+      connectDatabase(defaultConn).then((res) => {
+        if (res.success && res.tables) {
+          setSchemas(res.tables);
+        }
+      });
+    } else {
+      // Check if backend already has an active connection (e.g. from session or upload)
+      fetchActiveSchema().then((res) => {
+        if (res.success && res.tables.length > 0) {
+          setSchemas(res.tables);
+        }
+      });
+    }
 
     const savedHistory = loadQueryHistory();
     setQueryHistory(savedHistory);
@@ -62,7 +92,7 @@ export default function App() {
   }, []);
 
   // Connection handlers
-  const handleSelectConnection = (conn: DatabaseConnection) => {
+  const handleSelectConnection = async (conn: DatabaseConnection, tables?: TableSchema[]) => {
     setActiveConnection(conn);
     const updated = connections.map((c) => ({
       ...c,
@@ -70,21 +100,38 @@ export default function App() {
     }));
     setConnections(updated);
     saveConnections(updated);
+
+    if (tables && tables.length > 0) {
+      setSchemas(tables);
+    } else {
+      const res = await connectDatabase(conn);
+      if (res.success && res.tables) {
+        setSchemas(res.tables);
+      }
+    }
   };
 
-  const handleAddConnection = (newConn: DatabaseConnection) => {
-    const updated = [newConn, ...connections];
+  const handleAddConnection = (newConn: DatabaseConnection, tables?: TableSchema[]) => {
+    const updated = [newConn, ...connections.filter((c) => c.id !== newConn.id)];
     setConnections(updated);
     saveConnections(updated);
     setActiveConnection(newConn);
+    if (tables) {
+      setSchemas(tables);
+    }
   };
 
   const handleDeleteConnection = (id: string) => {
     const updated = connections.filter((c) => c.id !== id);
     setConnections(updated);
     saveConnections(updated);
-    if (activeConnection?.id === id && updated.length > 0) {
-      setActiveConnection(updated[0]);
+    if (activeConnection.id === id) {
+      if (updated.length > 0) {
+        handleSelectConnection(updated[0]);
+      } else {
+        setActiveConnection(PLACEHOLDER_CONNECTION);
+        setSchemas([]);
+      }
     }
   };
 
@@ -112,7 +159,7 @@ export default function App() {
         activePage={activePage}
         setActivePage={setActivePage}
         backendHealth={backendHealth}
-        activeConnectionName={activeConnection?.name || "No Connection"}
+        activeConnectionName={activeConnection.name}
       />
 
       {/* Main Dynamic View Content */}
@@ -125,22 +172,22 @@ export default function App() {
           />
         )}
 
-        {activePage === "workspace" && activeConnection && (
+        {activePage === "workspace" && (
           <WorkspacePage
-            connections={connections}
+            connections={connections.length > 0 ? connections : [activeConnection]}
             activeConnection={activeConnection}
             onSelectConnection={handleSelectConnection}
-            schemas={DEFAULT_SCHEMAS}
+            schemas={schemas}
             onOpenConnections={() => setActivePage("connections")}
             onSaveHistory={handleSaveHistory}
             initialQuestion={workspacePrompt}
           />
         )}
 
-        {activePage === "connections" && activeConnection && (
+        {activePage === "connections" && (
           <ConnectionsPage
             connections={connections}
-            activeConnection={activeConnection}
+            activeConnection={activeConnection.id !== "none" ? activeConnection : null}
             onSelectConnection={handleSelectConnection}
             onAddConnection={handleAddConnection}
             onDeleteConnection={handleDeleteConnection}

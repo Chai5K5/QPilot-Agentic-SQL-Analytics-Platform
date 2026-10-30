@@ -16,7 +16,8 @@ import { submitQuestionToBackend } from "@/services/api";
 import { 
   AlertTriangle, 
   RotateCcw, 
-  BarChart3
+  BarChart3,
+  Database
 } from "lucide-react";
 
 interface WorkspacePageProps {
@@ -81,7 +82,7 @@ export function WorkspacePage({
   };
 
   const handleSelectTableForQuery = (tableName: string) => {
-    const prompt = `Show me summary metrics and key records from the ${tableName} table`;
+    const prompt = `SELECT * FROM "${tableName}" LIMIT 25;`;
     setCurrentQuestion(prompt);
     setIsSchemaOpen(false);
   };
@@ -99,6 +100,29 @@ export function WorkspacePage({
         tableCount={schemas.length}
       />
 
+      {/* Zero State Notice */}
+      {schemas.length === 0 && (
+        <div className="p-5 rounded-2xl bg-neutral-900/80 border border-neutral-800 flex flex-col sm:flex-row items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            <div className="w-9 h-9 rounded-xl bg-cyan-950 border border-cyan-800 flex items-center justify-center text-cyan-400 flex-shrink-0">
+              <Database className="w-4 h-4" />
+            </div>
+            <div>
+              <h4 className="text-sm font-bold text-white">No database or dataset connected</h4>
+              <p className="text-xs text-neutral-400 mt-0.5">
+                Connect your PostgreSQL or MySQL database, or upload a CSV file to inspect schema and query data.
+              </p>
+            </div>
+          </div>
+          <button
+            onClick={onOpenConnections}
+            className="px-4 py-2 rounded-xl text-xs font-semibold bg-cyan-500 hover:bg-cyan-400 text-neutral-950 transition-colors shadow-lg shadow-cyan-500/20 cursor-pointer flex-shrink-0"
+          >
+            Connect Database / Upload CSV
+          </button>
+        </div>
+      )}
+
       {/* 2. Schema Explorer Drawer */}
       <SchemaViewer
         schemas={schemas}
@@ -107,11 +131,12 @@ export function WorkspacePage({
         onSelectTableForQuery={handleSelectTableForQuery}
       />
 
-      {/* 3. Natural Language Question Input Box */}
+      {/* 3. Question / SQL Input Box */}
       <QueryInput
         onRunQuery={handleRunQuery}
         isLoading={isLoading}
         initialQuestion={currentQuestion}
+        schemas={schemas}
       />
 
       {/* 4. Global Error Alert if request failed */}
@@ -126,7 +151,7 @@ export function WorkspacePage({
           </div>
           <button
             onClick={() => handleRunQuery(currentQuestion)}
-            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-rose-900/60 hover:bg-rose-800 text-white transition-colors"
+            className="flex items-center gap-1.5 px-3 py-1 rounded-md text-xs font-semibold bg-rose-900/60 hover:bg-rose-800 text-white transition-colors cursor-pointer"
           >
             <RotateCcw className="w-3.5 h-3.5" />
             Retry
@@ -143,43 +168,45 @@ export function WorkspacePage({
             durationMs={lastResult.durationMs}
           />
 
-          {/* Generated SQL & Safety Inspection */}
+          {/* Generated Read-Only SQL Viewer */}
           <SqlViewer
             sql={lastResult.generatedSql}
-            explanation={lastResult.explanation}
-            isValidatedReadOnly={lastResult.isReadOnlyValidated}
+            isReadOnlyValidated={lastResult.isReadOnlyValidated}
             validationError={lastResult.validationError}
+            explanation={lastResult.explanation}
           />
 
-          {/* Result Data & Visualizations (Only if read-only check passed) */}
-          {lastResult.isReadOnlyValidated && (
-            <div className="space-y-4">
-              <div className="flex items-center justify-between border-b border-neutral-800 pb-2">
+          {/* Result Dataset with Toggle for Table / Chart */}
+          {lastResult.executionStatus === "success" && (
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
                 <div className="flex items-center gap-2">
-                  <h3 className="text-sm font-bold text-white">Query Analytics Output</h3>
-                  <span className="text-[10px] font-mono px-2 py-0.5 rounded bg-neutral-900 text-neutral-400 border border-neutral-800">
-                    {lastResult.rowCount} rows returned
+                  <h3 className="text-sm font-bold text-white uppercase tracking-wider">
+                    Query Output
+                  </h3>
+                  <span className="text-xs font-mono text-neutral-400">
+                    ({lastResult.rowCount} rows returned in {lastResult.durationMs}ms)
                   </span>
                 </div>
 
-                {/* View toggle (Table vs Chart) */}
-                <div className="flex items-center gap-1 bg-neutral-900 p-1 rounded-lg border border-neutral-800 text-xs">
+                {/* View switcher buttons */}
+                <div className="flex items-center p-0.5 rounded-lg bg-neutral-900 border border-neutral-800">
                   <button
                     onClick={() => setViewMode("table")}
-                    className={`px-3 py-1 rounded-md transition-colors ${
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors cursor-pointer ${
                       viewMode === "table"
-                        ? "bg-neutral-800 text-white font-medium"
-                        : "text-neutral-400 hover:text-neutral-200"
+                        ? "bg-neutral-800 text-cyan-300 font-semibold"
+                        : "text-neutral-400 hover:text-white"
                     }`}
                   >
-                    Data Table
+                    Table View
                   </button>
                   <button
                     onClick={() => setViewMode("chart")}
-                    className={`px-3 py-1 rounded-md transition-colors flex items-center gap-1.5 ${
+                    className={`px-3 py-1 rounded-md text-xs font-medium transition-colors flex items-center gap-1.5 cursor-pointer ${
                       viewMode === "chart"
-                        ? "bg-neutral-800 text-white font-medium"
-                        : "text-neutral-400 hover:text-neutral-200"
+                        ? "bg-neutral-800 text-cyan-300 font-semibold"
+                        : "text-neutral-400 hover:text-white"
                     }`}
                   >
                     <BarChart3 className="w-3.5 h-3.5" />

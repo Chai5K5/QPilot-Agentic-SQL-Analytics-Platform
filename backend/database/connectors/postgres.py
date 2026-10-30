@@ -22,12 +22,15 @@ class PostgreSQLConnector(DatabaseManager):
         dbname: Optional[str] = None,
         user: Optional[str] = None,
         password: Optional[str] = None,
+        ssl: Optional[bool] = None,
+        **kwargs
     ):
-        self.host = host or settings.DB_HOST
-        self.port = port or (settings.DB_PORT if hasattr(settings, "DB_PORT") else 5432)
-        self.dbname = dbname or settings.DB_NAME
-        self.user = user or settings.DB_USER
-        self.password = password or settings.DB_PASSWORD
+        self.host = host if host is not None else getattr(settings, "DB_HOST", "localhost")
+        self.port = int(port) if port is not None else int(getattr(settings, "DB_PORT", 5432))
+        self.dbname = dbname if dbname is not None else getattr(settings, "DB_NAME", "postgres")
+        self.user = user if user is not None else getattr(settings, "DB_USER", "postgres")
+        self.password = password if password is not None else getattr(settings, "DB_PASSWORD", "")
+        self.ssl = ssl
         self.connection = None
 
     def connect(self):
@@ -35,16 +38,23 @@ class PostgreSQLConnector(DatabaseManager):
         Establish a connection to the PostgreSQL database.
         """
         try:
-            self.connection = psycopg.connect(
-                host=self.host,
-                port=self.port,
-                dbname=self.dbname,
-                user=self.user,
-                password=self.password,
-            )
+            conn_kwargs = {
+                "host": self.host,
+                "port": self.port,
+                "dbname": self.dbname,
+                "user": self.user,
+                "password": self.password,
+                "connect_timeout": 5,
+            }
+            if self.ssl is False:
+                conn_kwargs["sslmode"] = "disable"
+            elif self.ssl is True:
+                conn_kwargs["sslmode"] = "prefer"
+
+            self.connection = psycopg.connect(**conn_kwargs)
             logger.info("Successfully connected to PostgreSQL.")
             return self.connection
-        except psycopg.Error:
+        except Exception:
             logger.exception("Failed to connect to PostgreSQL.")
             raise
 
@@ -53,13 +63,12 @@ class PostgreSQLConnector(DatabaseManager):
         Close the PostgreSQL database connection.
         """
         if self.connection is None:
-            logger.warning("No active PostgreSQL connection to close.")
             return
 
         try:
             self.connection.close()
             logger.info("PostgreSQL connection closed successfully.")
-        except psycopg.Error:
+        except Exception:
             logger.exception("Failed to close PostgreSQL connection.")
             raise
         finally:
@@ -93,7 +102,7 @@ class PostgreSQLConnector(DatabaseManager):
                     return list(cursor.fetchall())
                 self.connection.commit()
                 return []
-        except psycopg.Error as e:
+        except Exception as e:
             logger.exception(f"Error executing PostgreSQL query: {query}")
             raise
 

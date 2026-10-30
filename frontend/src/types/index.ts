@@ -1,4 +1,4 @@
-export type DatabaseType = "postgresql" | "sqlite" | "mysql";
+export type DatabaseType = "postgresql" | "sqlite" | "mysql" | "csv";
 
 export type ConnectionStatus = "connected" | "disconnected" | "testing" | "error";
 
@@ -16,6 +16,8 @@ export interface DatabaseConnection {
   status: ConnectionStatus;
   lastChecked?: string;
   isDefault?: boolean;
+  tableCount?: number;
+  rowCount?: number;
 }
 
 export interface ColumnInfo {
@@ -25,6 +27,7 @@ export interface ColumnInfo {
   isForeignKey?: boolean;
   nullable?: boolean;
   references?: string;
+  defaultValue?: any;
 }
 
 export interface TableSchema {

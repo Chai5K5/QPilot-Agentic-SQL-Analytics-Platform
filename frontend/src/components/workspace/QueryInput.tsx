@@ -1,4 +1,5 @@
 import React, { useState } from "react";
+import { TableSchema } from "@/types";
 import { 
   Send, 
   Sparkles, 
@@ -11,20 +12,14 @@ interface QueryInputProps {
   onRunQuery: (question: string) => void;
   isLoading: boolean;
   initialQuestion?: string;
+  schemas?: TableSchema[];
 }
-
-const EXAMPLE_QUESTIONS = [
-  "Which product categories generated the most revenue from completed orders?",
-  "SELECT * FROM customers LIMIT 5;",
-  "SELECT * FROM products WHERE price > 50;",
-  "Show me summary metrics and key records from the orders table",
-  "DROP TABLE customers CASCADE;", // Safety test prompt
-];
 
 export function QueryInput({
   onRunQuery,
   isLoading,
   initialQuestion = "",
+  schemas = [],
 }: QueryInputProps) {
   const [question, setQuestion] = useState(initialQuestion);
   const [validationError, setValidationError] = useState<string | null>(null);
@@ -35,11 +30,24 @@ export function QueryInput({
     }
   }, [initialQuestion]);
 
+  const firstTable = schemas.length > 0 ? schemas[0].name : null;
+  const examplePrompts = firstTable
+    ? [
+        `SELECT * FROM "${firstTable}" LIMIT 5;`,
+        `Show me summary metrics and key records from the ${firstTable} table`,
+        `SELECT COUNT(*) AS total_rows FROM "${firstTable}";`,
+        `DROP TABLE "${firstTable}" CASCADE;`,
+      ]
+    : [
+        "SELECT 1 AS health_check;",
+        "DROP TABLE users CASCADE;",
+      ];
+
   const handleSubmit = (e?: React.FormEvent) => {
     if (e) e.preventDefault();
     const trimmed = question.trim();
     if (!trimmed) {
-      setValidationError("Please enter a question about your database.");
+      setValidationError("Please enter a question or SQL query.");
       return;
     }
     setValidationError(null);
@@ -82,7 +90,11 @@ export function QueryInput({
             }}
             onKeyDown={handleKeyDown}
             disabled={isLoading}
-            placeholder="e.g. Which product categories generated the most revenue from completed orders? or SELECT * FROM customers;"
+            placeholder={
+              firstTable
+                ? `e.g. SELECT * FROM "${firstTable}" LIMIT 5; or Ask anything about your data...`
+                : "e.g. Upload a CSV or connect your PostgreSQL/MySQL database to query..."
+            }
             className={`w-full p-4 rounded-xl text-sm bg-neutral-950 text-white placeholder-neutral-500 border transition-all resize-none font-sans focus:outline-none focus:ring-2 ${
               validationError
                 ? "border-rose-500 focus:ring-rose-500/20"
@@ -118,7 +130,7 @@ export function QueryInput({
             <span className="text-[11px] font-mono text-neutral-500 mr-1 flex-shrink-0">
               Examples:
             </span>
-            {EXAMPLE_QUESTIONS.map((ex, idx) => {
+            {examplePrompts.map((ex, idx) => {
               const isDestructive = ex.includes("DROP");
               return (
                 <button
@@ -133,7 +145,7 @@ export function QueryInput({
                       ? "bg-rose-950/40 border border-rose-900/60 text-rose-300 hover:bg-rose-900/40"
                       : "bg-neutral-800/80 border border-neutral-700 text-neutral-300 hover:text-white hover:bg-neutral-700"
                   }`}
-                  title={isDestructive ? "Test Read-Only AST Validation Blocker" : "Load sample question"}
+                  title={isDestructive ? "Test Read-Only AST Validation Blocker" : "Load sample query"}
                 >
                   {isDestructive ? "⚠️ Test Safety Guard (DROP)" : ex.slice(0, 36) + "..."}
                 </button>
@@ -150,7 +162,7 @@ export function QueryInput({
             {isLoading ? (
               <>
                 <Loader2 className="w-4 h-4 animate-spin" />
-                <span>Planning & Executing...</span>
+                <span>Running Query...</span>
               </>
             ) : (
               <>

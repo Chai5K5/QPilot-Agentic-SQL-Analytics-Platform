@@ -19,3 +19,8 @@ frontend/node_modules/
 # OS
 .DS_Store
 Thumbs.db
+
+# User uploaded files & runtime data
+backend/data/
+*.sqlite
+*.sqlite3

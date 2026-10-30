@@ -1,4 +1,11 @@
-import { BackendHealth, ExecutionPlan, PlanStage, QueryExecutionResult } from "@/types";
+import {
+  BackendHealth,
+  DatabaseConnection,
+  ExecutionPlan,
+  PlanStage,
+  QueryExecutionResult,
+  TableSchema,
+} from "@/types";
 
 const BACKEND_BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://127.0.0.1:8000";
 
@@ -72,9 +79,150 @@ export async function checkBackendHealth(): Promise<BackendHealth> {
   }
 }
 
+export async function testDatabaseConnection(
+  conn: Partial<DatabaseConnection>
+): Promise<{ success: boolean; message: string; latency_ms?: number; table_count?: number }> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(`${BACKEND_BASE_URL}/connections/test`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(conn),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    const data = await response.json();
+    return {
+      success: data.success,
+      message: data.message,
+      latency_ms: data.latency_ms,
+      table_count: data.table_count,
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.name === "AbortError" ? "Connection test timed out." : err.message || "Failed to reach backend.",
+    };
+  }
+}
+
+export async function connectDatabase(
+  conn: Partial<DatabaseConnection>
+): Promise<{
+  success: boolean;
+  message: string;
+  connection?: DatabaseConnection;
+  tables: TableSchema[];
+}> {
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/connections/connect`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(conn),
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        success: false,
+        message: data.detail || data.message || "Failed to connect to database.",
+        tables: [],
+      };
+    }
+
+    return {
+      success: true,
+      message: data.message,
+      connection: data.connection,
+      tables: data.tables || [],
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || "Connection request failed.",
+      tables: [],
+    };
+  }
+}
+
+export async function uploadDatabaseFile(
+  file: File
+): Promise<{
+  success: boolean;
+  message: string;
+  connection?: DatabaseConnection;
+  tables: TableSchema[];
+}> {
+  try {
+    const formData = new FormData();
+    formData.append("file", file);
+
+    const response = await fetch(`${BACKEND_BASE_URL}/connections/upload`, {
+      method: "POST",
+      body: formData,
+    });
+
+    const data = await response.json();
+    if (!response.ok) {
+      return {
+        success: false,
+        message: data.detail || data.message || "File upload failed.",
+        tables: [],
+      };
+    }
+
+    return {
+      success: true,
+      message: data.message,
+      connection: data.connection,
+      tables: data.tables || [],
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message: err.message || "Upload request failed.",
+      tables: [],
+    };
+  }
+}
+
+export async function fetchActiveSchema(): Promise<{
+  success: boolean;
+  connection_name?: string;
+  tables: TableSchema[];
+}> {
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/schema`);
+    if (!response.ok) {
+      return { success: false, tables: [] };
+    }
+    const data = await response.json();
+    return {
+      success: true,
+      connection_name: data.connection_name,
+      tables: data.tables || [],
+    };
+  } catch {
+    return { success: false, tables: [] };
+  }
+}
+
+export async function fetchActiveConnection(): Promise<DatabaseConnection | null> {
+  try {
+    const response = await fetch(`${BACKEND_BASE_URL}/connections/active`);
+    if (!response.ok) return null;
+    return await response.json();
+  } catch {
+    return null;
+  }
+}
+
 export async function submitQuestionToBackend(
   question: string,
-  connectionName: string = "QPilot SQLite Dev"
+  connectionName: string = "Connected Database"
 ): Promise<QueryExecutionResult> {
   const startTime = performance.now();
   const timestamp = new Date().toISOString();
@@ -96,7 +244,7 @@ export async function submitQuestionToBackend(
       rowCount: 0,
       durationMs,
       timestamp,
-      connectionId: "conn-1",
+      connectionId: "conn-active",
       connectionName,
       executionPlan: {
         task: "analyze_sql",
@@ -140,7 +288,7 @@ export async function submitQuestionToBackend(
 
   try {
     const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 15000);
+    const timeoutId = setTimeout(() => controller.abort(), 20000);
 
     const response = await fetch(`${BACKEND_BASE_URL}/query`, {
       method: "POST",
@@ -168,7 +316,7 @@ export async function submitQuestionToBackend(
         rowCount: 0,
         durationMs,
         timestamp,
-        connectionId: "conn-1",
+        connectionId: "conn-active",
         connectionName,
         executionPlan: {
           task: "query_execution",
@@ -201,7 +349,7 @@ export async function submitQuestionToBackend(
         rowCount: 0,
         durationMs,
         timestamp,
-        connectionId: "conn-1",
+        connectionId: "conn-active",
         connectionName,
         executionPlan: {
           task: data.plan?.task || "query_execution",
@@ -221,7 +369,12 @@ export async function submitQuestionToBackend(
 
     // Success: Extract actual data from database execution response
     const rows: Record<string, any>[] = data.results || [];
-    const columns: string[] = rows.length > 0 ? Object.keys(rows[0]) : [];
+    const columns: string[] =
+      data.columns && data.columns.length > 0
+        ? data.columns
+        : rows.length > 0
+        ? Object.keys(rows[0])
+        : [];
 
     const planStages: PlanStage[] =
       data.plan?.steps && data.plan.steps.length > 0
@@ -240,7 +393,7 @@ export async function submitQuestionToBackend(
             },
             {
               id: "2",
-              label: "SQL Generator (Planner)",
+              label: "SQL Generator",
               status: "completed",
               detail: "Generated SQL statement",
             },
@@ -275,10 +428,10 @@ export async function submitQuestionToBackend(
       executionStatus: "success",
       columns,
       rows,
-      rowCount: rows.length,
+      rowCount: data.rowCount ?? rows.length,
       durationMs,
       timestamp,
-      connectionId: "conn-1",
+      connectionId: "conn-active",
       connectionName,
       executionPlan: {
         task: data.plan?.task || "analyze_sql",
@@ -303,7 +456,7 @@ export async function submitQuestionToBackend(
       rowCount: 0,
       durationMs,
       timestamp,
-      connectionId: "conn-1",
+      connectionId: "conn-active",
       connectionName,
       executionPlan: {
         task: "connect_backend",
