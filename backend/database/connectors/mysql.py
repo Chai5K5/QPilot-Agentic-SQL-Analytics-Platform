@@ -173,3 +173,4 @@ class MySQLConnector(DatabaseManager):
         for table in tables:
             schema[table] = self.describe_table(table)
         return schema
+

@@ -21,6 +21,22 @@ class ConnectionConfigRequest(BaseModel):
     filePath: Optional[str] = None
 
 
+class ListDatabasesRequest(BaseModel):
+    type: str
+    host: Optional[str] = "localhost"
+    port: Optional[int] = None
+    username: Optional[str] = None
+    password: Optional[str] = None
+    ssl: Optional[bool] = None
+    database: Optional[str] = None
+
+
+class ListDatabasesResponse(BaseModel):
+    success: bool
+    message: str
+    databases: List[str] = []
+
+
 class ConnectionTestResponse(BaseModel):
     success: bool
     message: str

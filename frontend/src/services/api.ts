@@ -79,6 +79,39 @@ export async function checkBackendHealth(): Promise<BackendHealth> {
   }
 }
 
+export async function listAvailableDatabases(
+  creds: Partial<DatabaseConnection>
+): Promise<{ success: boolean; message: string; databases: string[] }> {
+  try {
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 8000);
+
+    const response = await fetch(`${BACKEND_BASE_URL}/connections/list-databases`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(creds),
+      signal: controller.signal,
+    });
+    clearTimeout(timeoutId);
+
+    const data = await response.json();
+    return {
+      success: data.success,
+      message: data.message,
+      databases: data.databases || [],
+    };
+  } catch (err: any) {
+    return {
+      success: false,
+      message:
+        err.name === "AbortError"
+          ? "Database discovery request timed out."
+          : err.message || "Failed to reach server.",
+      databases: [],
+    };
+  }
+}
+
 export async function testDatabaseConnection(
   conn: Partial<DatabaseConnection>
 ): Promise<{ success: boolean; message: string; latency_ms?: number; table_count?: number }> {

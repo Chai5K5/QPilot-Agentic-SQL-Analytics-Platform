@@ -371,3 +371,94 @@ def get_active_connection_info() -> Dict[str, Any]:
     """
     global _active_connection_info
     return _active_connection_info
+
+
+
+def list_available_databases(config: Dict[str, Any]) -> Tuple[bool, str, List[str]]:
+    """
+    Connects to the specified database server (e.g. PostgreSQL or MySQL)
+    and queries the server catalog to return all databases available to the user.
+    """
+    db_type = config.get("type", "").lower()
+    host = config.get("host") or "localhost"
+    port = config.get("port")
+    user = config.get("username")
+    password = config.get("password") or ""
+    ssl = config.get("ssl")
+
+    if db_type in ("postgres", "postgresql"):
+        try:
+            port = int(port or 5432)
+            user = user or "postgres"
+            initial_db = config.get("database") or "postgres"
+
+            conn_kwargs = {
+                "host": host,
+                "port": port,
+                "dbname": initial_db,
+                "user": user,
+                "password": password,
+                "connect_timeout": 5,
+            }
+            if ssl is False:
+                conn_kwargs["sslmode"] = "disable"
+            elif ssl is True:
+                conn_kwargs["sslmode"] = "prefer"
+
+            import psycopg
+            try:
+                conn = psycopg.connect(**conn_kwargs)
+            except Exception:
+                # If initial_db didn't exist, try template1
+                if initial_db != "template1":
+                    conn_kwargs["dbname"] = "template1"
+                    conn = psycopg.connect(**conn_kwargs)
+                else:
+                    raise
+
+            with conn.cursor() as cur:
+                cur.execute(
+                    "SELECT datname FROM pg_database WHERE datistemplate = false ORDER BY datname;"
+                )
+                databases = [row[0] for row in cur.fetchall()]
+            conn.close()
+            return True, f"Found {len(databases)} database(s) on PostgreSQL server.", databases
+        except Exception as e:
+            logger.warning(f"Failed to list PostgreSQL databases: {e}")
+            return False, f"Could not list databases: {str(e)}", []
+
+    elif db_type == "mysql":
+        try:
+            port = int(port or 3306)
+            user = user or "root"
+            import pymysql
+
+            conn = pymysql.connect(
+                host=host,
+                port=port,
+                user=user,
+                password=password,
+                connect_timeout=5,
+            )
+            with conn.cursor() as cur:
+                cur.execute("SHOW DATABASES;")
+                system_dbs = {"information_schema", "performance_schema", "mysql", "sys"}
+                databases = [row[0] for row in cur.fetchall() if row[0] not in system_dbs]
+            conn.close()
+            return True, f"Found {len(databases)} database(s) on MySQL server.", databases
+        except Exception as e:
+            logger.warning(f"Failed to list MySQL databases: {e}")
+            return False, f"Could not list databases: {str(e)}", []
+
+    elif db_type in ("sqlite", "csv"):
+        found_dbs = []
+        for search_dir in (BASE_DIR, UPLOADS_DIR, BASE_DIR.parent):
+            if search_dir.exists():
+                for p in search_dir.glob("*.db"):
+                    found_dbs.append(p.name)
+                for p in search_dir.glob("*.sqlite*"):
+                    found_dbs.append(p.name)
+        dbs = sorted(list(set(found_dbs)))
+        return True, f"Found {len(dbs)} local SQLite database file(s).", dbs
+
+    return False, f"Unsupported database engine '{db_type}'.", []

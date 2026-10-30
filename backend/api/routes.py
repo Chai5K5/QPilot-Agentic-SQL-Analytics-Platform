@@ -4,6 +4,8 @@ from api.schemas import (
     ConnectionConnectResponse,
     ConnectionTestResponse,
     HealthResponse,
+    ListDatabasesRequest,
+    ListDatabasesResponse,
     QueryRequest,
     QueryResponse,
     SchemaResponse,
@@ -14,6 +16,7 @@ from services.database_service import (
     connect_database,
     get_active_connection_info,
     get_active_schema,
+    list_available_databases,
     load_csv,
     load_sqlite_file,
     test_connection_config,
@@ -61,6 +64,20 @@ def root():
 @router.get("/health", response_model=HealthResponse)
 def health_check():
     return get_health_status()
+
+
+@router.post("/connections/list-databases", response_model=ListDatabasesResponse)
+def list_databases_endpoint(request: ListDatabasesRequest):
+    """
+    Connect to a server (e.g. PostgreSQL or MySQL) and query all accessible databases
+    so the user can choose from all databases available to them locally.
+    """
+    is_success, message, databases = list_available_databases(request.model_dump())
+    return ListDatabasesResponse(
+        success=is_success,
+        message=message,
+        databases=databases,
+    )
 
 
 @router.post("/connections/test", response_model=ConnectionTestResponse)
