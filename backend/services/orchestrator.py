@@ -116,8 +116,9 @@ def process_user_request(question: str) -> Dict[str, Any]:
 
     if has_groq_key:
         try:
+            dialect = conn_info.get("type", "sqlite")
             plan = plan_user_request(question)
-            sql_result = generate_sql(plan, schema)
+            sql_result = generate_sql(plan, schema, dialect=dialect)
             clean_sql = sanitize_query(sql_result.sql)
 
             if not validate_read_only(clean_sql):
