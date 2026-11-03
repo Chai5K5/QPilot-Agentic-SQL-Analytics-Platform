@@ -257,6 +257,8 @@ export function AddConnectionModal({
       const newConn: DatabaseConnection = {
         ...connectRes.connection,
         name: name.trim() || connectRes.connection.name,
+        password: password || initialConnection?.password,
+        ssl: ssl,
         isDefault: true,
         status: "connected",
       };
