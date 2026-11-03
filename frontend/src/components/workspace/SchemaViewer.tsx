@@ -152,10 +152,10 @@ export function SchemaViewer({
                       <tr key={col.name} className="hover:bg-neutral-800/30">
                         <td className="py-2 px-3 text-white font-medium flex items-center gap-1.5">
                           {col.isPrimaryKey && (
-                            <Key className="w-3 h-3 text-amber-400" title="Primary Key" />
+                            <Key className="w-3 h-3 text-amber-400" aria-label="Primary Key" />
                           )}
                           {col.isForeignKey && (
-                            <Link2 className="w-3 h-3 text-blue-400" title="Foreign Key" />
+                            <Link2 className="w-3 h-3 text-blue-400" aria-label="Foreign Key" />
                           )}
                           <span>{col.name}</span>
                         </td>

@@ -171,7 +171,7 @@ export function WorkspacePage({
           {/* Generated Read-Only SQL Viewer */}
           <SqlViewer
             sql={lastResult.generatedSql}
-            isReadOnlyValidated={lastResult.isReadOnlyValidated}
+            isValidatedReadOnly={lastResult.isReadOnlyValidated}
             validationError={lastResult.validationError}
             explanation={lastResult.explanation}
           />
